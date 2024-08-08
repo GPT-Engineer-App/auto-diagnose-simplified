@@ -1,33 +1,88 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AppBar, Toolbar, Typography, Container, Grid, Card, CardContent, TextField, Button, Snackbar } from '@mui/material';
 import { DirectionsCar, Person, Build } from '@mui/icons-material';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { auth, db } from '../main';
+import { signInWithPopup, GoogleAuthProvider, signOut } from 'firebase/auth';
+import { collection, addDoc, getDocs, query, where, updateDoc, deleteDoc, doc } from 'firebase/firestore';
 
 const Index = () => {
-  const [username, setUsername] = useState('');
-  const [vehicles, setVehicles] = useState([]);
+  const [user, setUser] = useState(null);
   const [newVehicle, setNewVehicle] = useState({ year: '', make: '', model: '' });
   const [diagnosticSymptoms, setDiagnosticSymptoms] = useState('');
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
 
-  const handleCreateProfile = () => {
-    if (username) {
-      setSnackbarMessage(`Profile created for ${username}`);
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      setUser(user);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const { data: vehicles } = useQuery({
+    queryKey: ['vehicles', user?.uid],
+    queryFn: async () => {
+      if (!user) return [];
+      const q = query(collection(db, 'vehicles'), where('userId', '==', user.uid));
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    },
+    enabled: !!user,
+  });
+
+  const addVehicleMutation = useMutation({
+    mutationFn: async (newVehicle) => {
+      const docRef = await addDoc(collection(db, 'vehicles'), {
+        ...newVehicle,
+        userId: user.uid,
+      });
+      return { id: docRef.id, ...newVehicle };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['vehicles', user?.uid]);
+      setSnackbarMessage('Vehicle added to garage');
+      setSnackbarOpen(true);
+      setNewVehicle({ year: '', make: '', model: '' });
+    },
+  });
+
+  const handleSignIn = async () => {
+    const provider = new GoogleAuthProvider();
+    try {
+      await signInWithPopup(auth, provider);
+      setSnackbarMessage('Signed in successfully');
+      setSnackbarOpen(true);
+    } catch (error) {
+      console.error('Error signing in:', error);
+      setSnackbarMessage('Error signing in');
+      setSnackbarOpen(true);
+    }
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth);
+      setSnackbarMessage('Signed out successfully');
+      setSnackbarOpen(true);
+    } catch (error) {
+      console.error('Error signing out:', error);
+      setSnackbarMessage('Error signing out');
       setSnackbarOpen(true);
     }
   };
 
   const handleAddVehicle = () => {
     if (newVehicle.year && newVehicle.make && newVehicle.model) {
-      setVehicles([...vehicles, newVehicle]);
-      setNewVehicle({ year: '', make: '', model: '' });
-      setSnackbarMessage('Vehicle added to garage');
-      setSnackbarOpen(true);
+      addVehicleMutation.mutate(newVehicle);
     }
   };
 
   const handleDiagnose = () => {
     if (diagnosticSymptoms) {
+      // TODO: Implement diagnostic logic with Firebase Cloud Functions
       setSnackbarMessage('Diagnostic request submitted');
       setSnackbarOpen(true);
     }
@@ -40,36 +95,29 @@ const Index = () => {
     <div>
       <AppBar position="static">
         <Toolbar>
-          <Typography variant="h6">Auto Vision Pro</Typography>
+          <Typography variant="h6" sx={{ flexGrow: 1 }}>Auto Vision Pro</Typography>
+          {user ? (
+            <Button color="inherit" onClick={handleSignOut}>Sign Out</Button>
+          ) : (
+            <Button color="inherit" onClick={handleSignIn}>Sign In</Button>
+          )}
         </Toolbar>
       </AppBar>
       <Container maxWidth="lg" sx={{ mt: 4 }}>
-        <Grid container spacing={3}>
-          <Grid item xs={12} md={4}>
-            <Card>
-              <CardContent>
-                <Typography variant="h5" gutterBottom>
-                  <Person /> User Profile
-                </Typography>
-                <TextField
-                  fullWidth
-                  label="Username"
-                  variant="outlined"
-                  margin="normal"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                />
-                <Button
-                  variant="contained"
-                  color="primary"
-                  fullWidth
-                  onClick={handleCreateProfile}
-                >
-                  Create Profile
-                </Button>
-              </CardContent>
-            </Card>
-          </Grid>
+        {user ? (
+          <Grid container spacing={3}>
+            <Grid item xs={12} md={4}>
+              <Card>
+                <CardContent>
+                  <Typography variant="h5" gutterBottom>
+                    <Person /> User Profile
+                  </Typography>
+                  <Typography>
+                    Welcome, {user.displayName || user.email}!
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
           <Grid item xs={12} md={8}>
             <Card>
               <CardContent>
@@ -77,12 +125,11 @@ const Index = () => {
                   <DirectionsCar /> My Garage
                 </Typography>
                 <Grid container spacing={2}>
-                  {vehicles.map((vehicle, index) => (
-                    <Grid item xs={12} sm={6} md={4} key={index}>
+                  {vehicles && vehicles.map((vehicle) => (
+                    <Grid item xs={12} sm={6} md={4} key={vehicle.id}>
                       <Card>
                         <CardContent>
-                          <Typography variant="subtitle1">Vehicle {index + 1}</Typography>
-                          <Typography variant="body2" color="text.secondary">
+                          <Typography variant="subtitle1">
                             {vehicle.year} {vehicle.make} {vehicle.model}
                           </Typography>
                         </CardContent>
@@ -158,6 +205,11 @@ const Index = () => {
             </Card>
           </Grid>
         </Grid>
+      ) : (
+        <Typography variant="h5" sx={{ mt: 4, textAlign: 'center' }}>
+          Please sign in to access Auto Vision Pro features.
+        </Typography>
+      )}
       </Container>
       <Snackbar
         anchorOrigin={{
