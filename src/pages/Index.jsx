@@ -1,18 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { AppBar, Toolbar, Typography, Container, Grid, Card, CardContent, TextField, Button, Snackbar } from '@mui/material';
-import { DirectionsCar, Person, Build } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { auth, db } from '../main';
 import { signInWithPopup, GoogleAuthProvider, signOut } from 'firebase/auth';
-import { collection, addDoc, getDocs, query, where, updateDoc, deleteDoc, doc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, query, where, deleteDoc, doc } from 'firebase/firestore';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Toaster } from "@/components/ui/toaster";
+import { useToast } from "@/components/ui/use-toast";
+import { Car, User, Wrench } from "lucide-react";
 
 const Index = () => {
   const [user, setUser] = useState(null);
   const [newVehicle, setNewVehicle] = useState({ year: '', make: '', model: '' });
   const [diagnosticSymptoms, setDiagnosticSymptoms] = useState('');
-  const [snackbarOpen, setSnackbarOpen] = useState(false);
-  const [snackbarMessage, setSnackbarMessage] = useState('');
-
+  const { toast } = useToast();
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -21,6 +26,14 @@ const Index = () => {
     });
     return () => unsubscribe();
   }, []);
+
+  const showToast = (message, type = "default") => {
+    toast({
+      title: type.charAt(0).toUpperCase() + type.slice(1),
+      description: message,
+      variant: type === "error" ? "destructive" : "default",
+    });
+  };
 
   const { data: vehicles } = useQuery({
     queryKey: ['vehicles', user?.uid],
@@ -43,9 +56,24 @@ const Index = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries(['vehicles', user?.uid]);
-      setSnackbarMessage('Vehicle added to garage');
-      setSnackbarOpen(true);
+      showToast('Vehicle added to garage');
       setNewVehicle({ year: '', make: '', model: '' });
+    },
+    onError: (error) => {
+      showToast('Error adding vehicle: ' + error.message, 'error');
+    },
+  });
+
+  const deleteVehicleMutation = useMutation({
+    mutationFn: async (vehicleId) => {
+      await deleteDoc(doc(db, 'vehicles', vehicleId));
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['vehicles', user?.uid]);
+      showToast('Vehicle removed from garage');
+    },
+    onError: (error) => {
+      showToast('Error removing vehicle: ' + error.message, 'error');
     },
   });
 
@@ -53,174 +81,147 @@ const Index = () => {
     const provider = new GoogleAuthProvider();
     try {
       await signInWithPopup(auth, provider);
-      setSnackbarMessage('Signed in successfully');
-      setSnackbarOpen(true);
+      showToast('Signed in successfully');
     } catch (error) {
       console.error('Error signing in:', error);
-      setSnackbarMessage('Error signing in');
-      setSnackbarOpen(true);
+      showToast('Error signing in: ' + error.message, 'error');
     }
   };
 
   const handleSignOut = async () => {
     try {
       await signOut(auth);
-      setSnackbarMessage('Signed out successfully');
-      setSnackbarOpen(true);
+      showToast('Signed out successfully');
     } catch (error) {
       console.error('Error signing out:', error);
-      setSnackbarMessage('Error signing out');
-      setSnackbarOpen(true);
+      showToast('Error signing out: ' + error.message, 'error');
     }
   };
 
   const handleAddVehicle = () => {
     if (newVehicle.year && newVehicle.make && newVehicle.model) {
       addVehicleMutation.mutate(newVehicle);
+    } else {
+      showToast('Please fill in all vehicle details', 'error');
     }
+  };
+
+  const handleDeleteVehicle = (vehicleId) => {
+    deleteVehicleMutation.mutate(vehicleId);
   };
 
   const handleDiagnose = () => {
     if (diagnosticSymptoms) {
       // TODO: Implement diagnostic logic with Firebase Cloud Functions
-      setSnackbarMessage('Diagnostic request submitted');
-      setSnackbarOpen(true);
+      showToast('Diagnostic request submitted');
+    } else {
+      showToast('Please enter symptoms or DTCs', 'error');
     }
   };
-
-  const handleCloseSnackbar = () => {
-    setSnackbarOpen(false);
-  };
   return (
-    <div>
-      <AppBar position="static">
-        <Toolbar>
-          <Typography variant="h6" sx={{ flexGrow: 1 }}>Auto Vision Pro</Typography>
-          {user ? (
-            <Button color="inherit" onClick={handleSignOut}>Sign Out</Button>
-          ) : (
-            <Button color="inherit" onClick={handleSignIn}>Sign In</Button>
-          )}
-        </Toolbar>
-      </AppBar>
-      <Container maxWidth="lg" sx={{ mt: 4 }}>
+    <div className="min-h-screen bg-gray-100">
+      <nav className="bg-white shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between h-16">
+            <div className="flex-shrink-0 flex items-center">
+              <h1 className="text-xl font-bold">Auto Vision Pro</h1>
+            </div>
+            <div className="flex items-center">
+              {user ? (
+                <Button variant="outline" onClick={handleSignOut}>Sign Out</Button>
+              ) : (
+                <Button onClick={handleSignIn}>Sign In</Button>
+              )}
+            </div>
+          </div>
+        </div>
+      </nav>
+
+      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         {user ? (
-          <Grid container spacing={3}>
-            <Grid item xs={12} md={4}>
-              <Card>
-                <CardContent>
-                  <Typography variant="h5" gutterBottom>
-                    <Person /> User Profile
-                  </Typography>
-                  <Typography>
-                    Welcome, {user.displayName || user.email}!
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-          <Grid item xs={12} md={8}>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <Card>
+              <CardHeader>
+                <CardTitle><User className="inline-block mr-2" /> User Profile</CardTitle>
+              </CardHeader>
               <CardContent>
-                <Typography variant="h5" gutterBottom>
-                  <DirectionsCar /> My Garage
-                </Typography>
-                <Grid container spacing={2}>
+                <p>Welcome, {user.displayName || user.email}!</p>
+              </CardContent>
+            </Card>
+
+            <Card className="md:col-span-2">
+              <CardHeader>
+                <CardTitle><Car className="inline-block mr-2" /> My Garage</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                   {vehicles && vehicles.map((vehicle) => (
-                    <Grid item xs={12} sm={6} md={4} key={vehicle.id}>
-                      <Card>
-                        <CardContent>
-                          <Typography variant="subtitle1">
-                            {vehicle.year} {vehicle.make} {vehicle.model}
-                          </Typography>
-                        </CardContent>
-                      </Card>
-                    </Grid>
+                    <Card key={vehicle.id}>
+                      <CardContent>
+                        <p className="font-semibold">{vehicle.year} {vehicle.make} {vehicle.model}</p>
+                      </CardContent>
+                      <CardFooter>
+                        <Button variant="destructive" onClick={() => handleDeleteVehicle(vehicle.id)}>Remove</Button>
+                      </CardFooter>
+                    </Card>
                   ))}
-                </Grid>
-                <Grid container spacing={2} sx={{ mt: 2 }}>
-                  <Grid item xs={12} sm={4}>
-                    <TextField
-                      fullWidth
-                      label="Year"
-                      variant="outlined"
+                </div>
+                <div className="grid grid-cols-3 gap-4 mt-4">
+                  <div>
+                    <Label htmlFor="year">Year</Label>
+                    <Input
+                      id="year"
                       value={newVehicle.year}
                       onChange={(e) => setNewVehicle({ ...newVehicle, year: e.target.value })}
                     />
-                  </Grid>
-                  <Grid item xs={12} sm={4}>
-                    <TextField
-                      fullWidth
-                      label="Make"
-                      variant="outlined"
+                  </div>
+                  <div>
+                    <Label htmlFor="make">Make</Label>
+                    <Input
+                      id="make"
                       value={newVehicle.make}
                       onChange={(e) => setNewVehicle({ ...newVehicle, make: e.target.value })}
                     />
-                  </Grid>
-                  <Grid item xs={12} sm={4}>
-                    <TextField
-                      fullWidth
-                      label="Model"
-                      variant="outlined"
+                  </div>
+                  <div>
+                    <Label htmlFor="model">Model</Label>
+                    <Input
+                      id="model"
                       value={newVehicle.model}
                       onChange={(e) => setNewVehicle({ ...newVehicle, model: e.target.value })}
                     />
-                  </Grid>
-                </Grid>
-                <Button
-                  variant="contained"
-                  color="primary"
-                  fullWidth
-                  sx={{ mt: 2 }}
-                  onClick={handleAddVehicle}
-                >
-                  Add Vehicle
-                </Button>
+                  </div>
+                </div>
+                <Button className="w-full mt-4" onClick={handleAddVehicle}>Add Vehicle</Button>
               </CardContent>
             </Card>
-          </Grid>
-          <Grid item xs={12}>
-            <Card>
+
+            <Card className="md:col-span-3">
+              <CardHeader>
+                <CardTitle><Wrench className="inline-block mr-2" /> Diagnostics</CardTitle>
+              </CardHeader>
               <CardContent>
-                <Typography variant="h5" gutterBottom>
-                  <Build /> Diagnostics
-                </Typography>
-                <TextField
-                  fullWidth
-                  label="Enter symptoms or DTCs"
-                  variant="outlined"
-                  margin="normal"
-                  multiline
-                  rows={3}
+                <Label htmlFor="symptoms">Enter symptoms or DTCs</Label>
+                <Textarea
+                  id="symptoms"
                   value={diagnosticSymptoms}
                   onChange={(e) => setDiagnosticSymptoms(e.target.value)}
+                  rows={3}
                 />
-                <Button
-                  variant="contained"
-                  color="primary"
-                  onClick={handleDiagnose}
-                >
-                  Diagnose
-                </Button>
+                <Button className="mt-4" onClick={handleDiagnose}>Diagnose</Button>
               </CardContent>
             </Card>
-          </Grid>
-        </Grid>
-      ) : (
-        <Typography variant="h5" sx={{ mt: 4, textAlign: 'center' }}>
-          Please sign in to access Auto Vision Pro features.
-        </Typography>
-      )}
-      </Container>
-      <Snackbar
-        anchorOrigin={{
-          vertical: 'bottom',
-          horizontal: 'center',
-        }}
-        open={snackbarOpen}
-        autoHideDuration={3000}
-        onClose={handleCloseSnackbar}
-        message={snackbarMessage}
-      />
+          </div>
+        ) : (
+          <Alert>
+            <AlertTitle>Welcome to Auto Vision Pro</AlertTitle>
+            <AlertDescription>
+              Please sign in to access Auto Vision Pro features.
+            </AlertDescription>
+          </Alert>
+        )}
+      </main>
+      <Toaster />
     </div>
   );
 };
