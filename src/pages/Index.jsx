@@ -11,7 +11,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Toaster } from "@/components/ui/toaster";
 import { useToast } from "@/components/ui/use-toast";
-import { Car, User, Wrench } from "lucide-react";
+import { Car, User, Wrench, LogIn, LogOut } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 const Index = () => {
   const [user, setUser] = useState(null);
@@ -80,7 +81,8 @@ const Index = () => {
   const handleSignIn = async () => {
     const provider = new GoogleAuthProvider();
     try {
-      await signInWithPopup(auth, provider);
+      const result = await signInWithPopup(auth, provider);
+      setUser(result.user);
       showToast('Signed in successfully');
     } catch (error) {
       console.error('Error signing in:', error);
@@ -91,6 +93,7 @@ const Index = () => {
   const handleSignOut = async () => {
     try {
       await signOut(auth);
+      setUser(null);
       showToast('Signed out successfully');
     } catch (error) {
       console.error('Error signing out:', error);
@@ -119,18 +122,28 @@ const Index = () => {
     }
   };
   return (
-    <div className="min-h-screen bg-gray-100">
-      <nav className="bg-white shadow-sm">
+    <div className="min-h-screen bg-gradient-to-b from-blue-100 to-white">
+      <nav className="bg-white shadow-md">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex-shrink-0 flex items-center">
-              <h1 className="text-xl font-bold">Auto Vision Pro</h1>
+              <h1 className="text-2xl font-bold text-blue-600">Auto Vision Pro</h1>
             </div>
             <div className="flex items-center">
               {user ? (
-                <Button variant="outline" onClick={handleSignOut}>Sign Out</Button>
+                <div className="flex items-center space-x-4">
+                  <Avatar>
+                    <AvatarImage src={user.photoURL} alt={user.displayName} />
+                    <AvatarFallback>{user.displayName?.charAt(0) || user.email?.charAt(0)}</AvatarFallback>
+                  </Avatar>
+                  <Button variant="outline" onClick={handleSignOut}>
+                    <LogOut className="mr-2 h-4 w-4" /> Sign Out
+                  </Button>
+                </div>
               ) : (
-                <Button onClick={handleSignIn}>Sign In</Button>
+                <Button onClick={handleSignIn}>
+                  <LogIn className="mr-2 h-4 w-4" /> Sign In
+                </Button>
               )}
             </div>
           </div>
@@ -140,25 +153,29 @@ const Index = () => {
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         {user ? (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <Card>
+            <Card className="bg-white shadow-lg hover:shadow-xl transition-shadow duration-300">
               <CardHeader>
-                <CardTitle><User className="inline-block mr-2" /> User Profile</CardTitle>
+                <CardTitle className="flex items-center text-blue-600">
+                  <User className="mr-2" /> User Profile
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <p>Welcome, {user.displayName || user.email}!</p>
+                <p className="text-lg font-semibold">Welcome, {user.displayName || user.email}!</p>
               </CardContent>
             </Card>
 
-            <Card className="md:col-span-2">
+            <Card className="md:col-span-2 bg-white shadow-lg hover:shadow-xl transition-shadow duration-300">
               <CardHeader>
-                <CardTitle><Car className="inline-block mr-2" /> My Garage</CardTitle>
+                <CardTitle className="flex items-center text-blue-600">
+                  <Car className="mr-2" /> My Garage
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                   {vehicles && vehicles.map((vehicle) => (
-                    <Card key={vehicle.id}>
-                      <CardContent>
-                        <p className="font-semibold">{vehicle.year} {vehicle.make} {vehicle.model}</p>
+                    <Card key={vehicle.id} className="bg-gray-50">
+                      <CardContent className="p-4">
+                        <p className="font-semibold text-gray-800">{vehicle.year} {vehicle.make} {vehicle.model}</p>
                       </CardContent>
                       <CardFooter>
                         <Button variant="destructive" onClick={() => handleDeleteVehicle(vehicle.id)}>Remove</Button>
@@ -166,13 +183,14 @@ const Index = () => {
                     </Card>
                   ))}
                 </div>
-                <div className="grid grid-cols-3 gap-4 mt-4">
+                <div className="grid grid-cols-3 gap-4 mt-6">
                   <div>
                     <Label htmlFor="year">Year</Label>
                     <Input
                       id="year"
                       value={newVehicle.year}
                       onChange={(e) => setNewVehicle({ ...newVehicle, year: e.target.value })}
+                      className="mt-1"
                     />
                   </div>
                   <div>
@@ -181,6 +199,7 @@ const Index = () => {
                       id="make"
                       value={newVehicle.make}
                       onChange={(e) => setNewVehicle({ ...newVehicle, make: e.target.value })}
+                      className="mt-1"
                     />
                   </div>
                   <div>
@@ -189,16 +208,19 @@ const Index = () => {
                       id="model"
                       value={newVehicle.model}
                       onChange={(e) => setNewVehicle({ ...newVehicle, model: e.target.value })}
+                      className="mt-1"
                     />
                   </div>
                 </div>
-                <Button className="w-full mt-4" onClick={handleAddVehicle}>Add Vehicle</Button>
+                <Button className="w-full mt-4 bg-blue-600 hover:bg-blue-700" onClick={handleAddVehicle}>Add Vehicle</Button>
               </CardContent>
             </Card>
 
-            <Card className="md:col-span-3">
+            <Card className="md:col-span-3 bg-white shadow-lg hover:shadow-xl transition-shadow duration-300">
               <CardHeader>
-                <CardTitle><Wrench className="inline-block mr-2" /> Diagnostics</CardTitle>
+                <CardTitle className="flex items-center text-blue-600">
+                  <Wrench className="mr-2" /> Diagnostics
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 <Label htmlFor="symptoms">Enter symptoms or DTCs</Label>
@@ -207,16 +229,17 @@ const Index = () => {
                   value={diagnosticSymptoms}
                   onChange={(e) => setDiagnosticSymptoms(e.target.value)}
                   rows={3}
+                  className="mt-1"
                 />
-                <Button className="mt-4" onClick={handleDiagnose}>Diagnose</Button>
+                <Button className="mt-4 bg-blue-600 hover:bg-blue-700" onClick={handleDiagnose}>Diagnose</Button>
               </CardContent>
             </Card>
           </div>
         ) : (
           <Alert>
-            <AlertTitle>Welcome to Auto Vision Pro</AlertTitle>
-            <AlertDescription>
-              Please sign in to access Auto Vision Pro features.
+            <AlertTitle className="text-xl font-bold text-blue-600">Welcome to Auto Vision Pro</AlertTitle>
+            <AlertDescription className="mt-2 text-gray-600">
+              Please sign in to access Auto Vision Pro features and start managing your vehicles.
             </AlertDescription>
           </Alert>
         )}
