@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { auth, db, openai } from '../main';
+import { auth, db } from '../main';
 import { motion, AnimatePresence } from 'framer-motion';
 import { signInWithPopup, GoogleAuthProvider, signOut } from 'firebase/auth';
 import { collection, addDoc, getDocs, query, where, deleteDoc, doc } from 'firebase/firestore';
@@ -128,28 +128,12 @@ const Index = () => {
     deleteVehicleMutation.mutate(vehicleId);
   };
 
-  const diagnosticMutation = useMutation({
-    mutationFn: async (symptoms) => {
-      const response = await openai.createCompletion({
-        model: "text-davinci-002",
-        prompt: `Diagnose the following car symptoms: ${symptoms}`,
-        max_tokens: 150,
-      });
-      return response.data.choices[0].text.trim();
-    },
-    onSuccess: (data) => {
-      setDiagnosticResult(data);
-      showToast('Diagnostic result received');
-    },
-    onError: (error) => {
-      showToast('Error getting diagnostic result: ' + error.message, 'error');
-    },
-  });
-
   const handleDiagnose = () => {
     if (diagnosticSymptoms) {
       if (userPlan === 'PRO' || queryPacks > 0) {
-        diagnosticMutation.mutate(diagnosticSymptoms);
+        // Placeholder for diagnostic logic
+        setDiagnosticResult("This is a placeholder diagnostic result. In a real application, this would be replaced with actual diagnostic information based on the symptoms provided.");
+        showToast('Diagnostic result received');
         if (userPlan !== 'PRO') {
           setQueryPacks(queryPacks - 1);
           // Update query packs in Firestore
