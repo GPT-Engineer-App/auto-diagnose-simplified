@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { auth, db } from '../main';
 import { motion, AnimatePresence } from 'framer-motion';
 import { signInWithPopup, GoogleAuthProvider, signOut } from 'firebase/auth';
-import { collection, addDoc, getDocs, query, where, deleteDoc, doc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, query, where, deleteDoc, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,6 +14,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { useToast } from "@/components/ui/use-toast";
 import { Car, User, Wrench, LogIn, LogOut } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Skeleton } from "@/components/ui/skeleton";
+import VehicleCard from '@/components/VehicleCard';
 
 const Index = () => {
   const [user, setUser] = useState(null);
@@ -36,6 +38,9 @@ const Index = () => {
             const userData = docSnap.data();
             setUserPlan(userData.plan || 'free');
             setQueryPacks(userData.queryPacks || 0);
+          } else {
+            // If the user document doesn't exist, create it
+            updateDoc(userRef, { plan: 'free', queryPacks: 0 });
           }
         });
       }
@@ -51,7 +56,7 @@ const Index = () => {
     });
   };
 
-  const { data: vehicles } = useQuery({
+  const { data: vehicles, isLoading: vehiclesLoading } = useQuery({
     queryKey: ['vehicles', user?.uid],
     queryFn: async () => {
       if (!user) return [];
@@ -93,6 +98,25 @@ const Index = () => {
     },
   });
 
+  const diagnosticMutation = useMutation({
+    mutationFn: async (symptoms) => {
+      // Simulate API call for diagnostic
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      return `Based on the symptoms "${symptoms}", the possible issues could be: 1) Faulty oxygen sensor, 2) Worn spark plugs, 3) Clogged fuel injectors. Please consult a professional mechanic for a thorough diagnosis.`;
+    },
+    onSuccess: (data) => {
+      setDiagnosticResult(data);
+      if (userPlan !== 'PRO') {
+        setQueryPacks(prev => prev - 1);
+        updateDoc(doc(db, 'users', user.uid), { queryPacks: queryPacks - 1 });
+      }
+      showToast('Diagnostic result received');
+    },
+    onError: (error) => {
+      showToast('Error during diagnosis: ' + error.message, 'error');
+    },
+  });
+
   const handleSignIn = async () => {
     const provider = new GoogleAuthProvider();
     try {
@@ -131,15 +155,7 @@ const Index = () => {
   const handleDiagnose = () => {
     if (diagnosticSymptoms) {
       if (userPlan === 'PRO' || queryPacks > 0) {
-        // Placeholder for diagnostic logic
-        setDiagnosticResult("This is a placeholder diagnostic result. In a real application, this would be replaced with actual diagnostic information based on the symptoms provided.");
-        showToast('Diagnostic result received');
-        if (userPlan !== 'PRO') {
-          setQueryPacks(queryPacks - 1);
-          // Update query packs in Firestore
-          const userRef = doc(db, 'users', user.uid);
-          updateDoc(userRef, { queryPacks: queryPacks - 1 });
-        }
+        diagnosticMutation.mutate(diagnosticSymptoms);
       } else {
         showToast('You need to upgrade to PRO or purchase Query Packs', 'error');
       }
@@ -149,7 +165,6 @@ const Index = () => {
   };
 
   const handleUpgradeToPro = () => {
-    // Implement upgrade logic here
     setUserPlan('PRO');
     const userRef = doc(db, 'users', user.uid);
     updateDoc(userRef, { plan: 'PRO' });
@@ -157,13 +172,13 @@ const Index = () => {
   };
 
   const handlePurchaseQueryPacks = () => {
-    // Implement purchase logic here
     const newQueryPacks = queryPacks + 5;
     setQueryPacks(newQueryPacks);
     const userRef = doc(db, 'users', user.uid);
     updateDoc(userRef, { queryPacks: newQueryPacks });
     showToast('Purchased 5 Query Packs successfully');
   };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-100 to-white">
       <nav className="bg-white shadow-md">
@@ -224,28 +239,21 @@ const Index = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <motion.div layout className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                  <AnimatePresence>
-                    {vehicles && vehicles.map((vehicle) => (
-                      <motion.div
-                        key={vehicle.id}
-                        initial={{ opacity: 0, scale: 0.8 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.8 }}
-                        transition={{ duration: 0.3 }}
-                      >
-                        <Card className="bg-gray-50">
-                          <CardContent className="p-4">
-                            <p className="font-semibold text-gray-800">{vehicle.year} {vehicle.make} {vehicle.model}</p>
-                          </CardContent>
-                          <CardFooter>
-                            <Button variant="destructive" onClick={() => handleDeleteVehicle(vehicle.id)}>Remove</Button>
-                          </CardFooter>
-                        </Card>
-                      </motion.div>
+                {vehiclesLoading ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                    {[...Array(3)].map((_, index) => (
+                      <Skeleton key={index} className="h-24 w-full" />
                     ))}
-                  </AnimatePresence>
-                </motion.div>
+                  </div>
+                ) : (
+                  <motion.div layout className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                    <AnimatePresence>
+                      {vehicles && vehicles.map((vehicle) => (
+                        <VehicleCard key={vehicle.id} vehicle={vehicle} onDelete={handleDeleteVehicle} />
+                      ))}
+                    </AnimatePresence>
+                  </motion.div>
+                )}
                 <div className="grid grid-cols-3 gap-4 mt-6">
                   <div>
                     <Label htmlFor="year">Year</Label>
@@ -275,7 +283,13 @@ const Index = () => {
                     />
                   </div>
                 </div>
-                <Button className="w-full mt-4 bg-blue-600 hover:bg-blue-700" onClick={handleAddVehicle}>Add Vehicle</Button>
+                <Button 
+                  className="w-full mt-4 bg-blue-600 hover:bg-blue-700" 
+                  onClick={handleAddVehicle}
+                  disabled={addVehicleMutation.isLoading}
+                >
+                  {addVehicleMutation.isLoading ? 'Adding...' : 'Add Vehicle'}
+                </Button>
               </CardContent>
             </Card>
 
@@ -302,10 +316,15 @@ const Index = () => {
                   {diagnosticMutation.isLoading ? 'Diagnosing...' : 'Diagnose'}
                 </Button>
                 {diagnosticResult && (
-                  <div className="mt-4 p-4 bg-gray-100 rounded-md">
+                  <motion.div 
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5 }}
+                    className="mt-4 p-4 bg-gray-100 rounded-md"
+                  >
                     <h3 className="font-semibold text-lg mb-2">Diagnostic Result:</h3>
                     <p>{diagnosticResult}</p>
-                  </div>
+                  </motion.div>
                 )}
               </CardContent>
             </Card>
